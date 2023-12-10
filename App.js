@@ -2,11 +2,10 @@
 import { StyleSheet, Text, View, TouchableOpacity, Alert, Image, TextInput, Button } from 'react-native';
 import { useEffect, useState, useRef } from 'react';
 import * as FileSystem from 'expo-file-system';
-import { SQLite } from 'expo-sqlite';
+import * as SQLite from 'expo-sqlite';
 import { Camera } from 'expo-camera';
+
 import * as ImagePicker from 'expo-image-picker';
-
-
 
 export default function App() {
   const [image, setImage] = useState()
@@ -14,6 +13,7 @@ export default function App() {
   const [cameraPermission, setCameraPermission] = useState();
   const [showCamera, setShowCamera] = useState(false)
   const [userNote, setUserNote] = useState('');
+  const textField = useRef(null)
 
   // intializing db
   const db = SQLite.openDatabase('practicalExamDB');
@@ -47,9 +47,10 @@ export default function App() {
       try {
         // if takePictureAsync was successful, the image state is set with the most recent uri
         let data = await camera.takePictureAsync(options);
-        setImage(data.uri);
 
         saveToFiles(data.uri)
+        setImage(data.uri);
+        console.log('Image is: ' , image)
       } catch (error) {
         console.log('Error taking picture: ', error);
       }
@@ -80,9 +81,7 @@ export default function App() {
       allowsEditing: true,
       quality: 1
     });
-
     if (!result.canceled) {
-      console.log(result)
       setImage(result.assets[0].uri);
       saveToFiles(result.assets[0].uri)
       console.log('Image uploaded')
@@ -96,7 +95,7 @@ export default function App() {
   const saveToDb = (image, note) => {
     db.transaction(
       tx => {
-        tx.executeSql('INSERT INTO Notes {photo, note} VALUES (?, ?)',
+        tx.executeSql('INSERT INTO Notes (photo, note) VALUES (?, ?)',
           [image, note],
           (_, { rowsAffected }) =>
             rowsAffected > 0 ? console.log('ROW INSERTED') :
@@ -105,8 +104,54 @@ export default function App() {
     )
   };
 
+  // const clearTable = () => {
+  //   db.transaction(
+  //     tx => {
+  //       tx.executeSql(
+  //         'DELETE FROM Notes',
+  //         [],
+  //         (_, result) => {
+  //           console.log('Table cleared successfully');
+  //         },
+  //         (_, error) => {
+  //           console.log('Error clearing table:', error);
+  //         }
+  //       );
+  //     },
+  //     (error) => {
+  //       console.log('Transaction error:', error);
+  //     },
+  //     () => {
+  //       console.log('Transaction complete');
+  //     }
+  //   );
+  // };
+
+  // // Call the clearTable function to clear all data from the table
+  // clearTable();
+
   const getFromDb = () => {
-    console.log('pookie')
+    db.transaction(
+      tx => {
+        tx.executeSql('SELECT * FROM Notes',
+          [],
+          (_, { rows }) => {
+            console.log('ROWS RETRIEVED!');
+            let entries = rows._array;
+
+            let dbResult = entries.map((entry) => `${entry.photo} \n ${entry.note}`).join('\n')
+            Alert.alert(
+              "DB Data",
+              dbResult
+            )
+
+          },
+          (_, result) => {
+            console.log('SELECT failed');
+            console.log(result)
+          })
+      }
+    )
   }
 
 
@@ -132,14 +177,13 @@ export default function App() {
 
 
   const saveDataHandler = () => {
-    console.log('heyy ', userNote)
     saveToDb(image, userNote)
+    textField.current.clear();
   }
 
   return (
     <View style={styles.container}>
       {showCamera ?
-
         <>
           <View style={styles.cameraContainer}>
             <Camera ref={ref => setCamera(ref)}
@@ -151,7 +195,6 @@ export default function App() {
               <Text style={styles.buttonText}>Take Picture</Text>
             </TouchableOpacity >
           </View>
-
         </>
         :
         <>
@@ -162,23 +205,20 @@ export default function App() {
 
 
           <TouchableOpacity style={styles.picture} onPress={photoOptions}>
-            {image ?
-              <Image
-                style={styles.images}
-                source={{ uri: image }} />
-              :
-              <Image
-                style={styles.images}
-              // source={require('./assets/placeholder.png')}
-              />}
-
+            {/* conditionally renders image if one is available */}
+            <Image
+              style={styles.images}
+              source={image ?
+                { uri: image } :
+                require('./assets/placeholder.png')} />
           </TouchableOpacity>
 
           <Text style={styles.secondHeader}>
             NOTE
           </Text>
           <View style={styles.textBox}>
-            <TextInput placeholder="Add notes here ... " onTextChange={(value) => setUserNote(value)}>
+            <TextInput 
+            ref={textField} placeholder="Add notes here ... " onChangeText={(value) => setUserNote(value)}>
 
             </TextInput>
           </View>
